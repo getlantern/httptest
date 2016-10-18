@@ -15,11 +15,13 @@ import (
 // hijackedInputData (okay to leave nil).
 func NewRecorder(hijackedInputData []byte) *HijackableResponseRecorder {
 	wrapped := httptest.NewRecorder()
-	return &HijackableResponseRecorder{
+	h := &HijackableResponseRecorder{
 		wrapped: wrapped,
 		in:      bufio.NewReader(bytes.NewBuffer(hijackedInputData)),
 		out:     bufio.NewWriter(wrapped.Body),
 	}
+	h.conn = mockconn.New(h.wrapped.Body, h.in)
+	return h
 }
 
 // HijackableResponseRecorder is very similar to
@@ -30,6 +32,7 @@ type HijackableResponseRecorder struct {
 	wrapped *httptest.ResponseRecorder
 	in      *bufio.Reader
 	out     *bufio.Writer
+	conn    *mockconn.Conn
 }
 
 func (h *HijackableResponseRecorder) Header() http.Header {
@@ -68,10 +71,14 @@ func (h *HijackableResponseRecorder) Flushed() bool {
 	return h.wrapped.Flushed
 }
 
+func (h *HijackableResponseRecorder) Closed() bool {
+	return h.conn.Closed()
+}
+
 func (h *HijackableResponseRecorder) HeaderMap() http.Header {
 	return h.wrapped.HeaderMap
 }
 
 func (h *HijackableResponseRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
-	return mockconn.New(h.wrapped.Body, h.in), bufio.NewReadWriter(h.in, h.out), nil
+	return h.conn, bufio.NewReadWriter(h.in, h.out), nil
 }
